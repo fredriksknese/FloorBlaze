@@ -1,0 +1,330 @@
+@namespace FloorPlan
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="fp-root">
+    <div class="fp-toolbar">
+        <button class="fp-btn" title="Add (furniture / wall / door / window)"
+                @onclick="ToggleAddMenu">+</button>
+
+        <button class="fp-btn @(Eng.ActiveTool == Tool.View ? "active" : "")"
+                title="View / pan" @onclick="() => SetTool(Tool.View)">👁</button>
+        <button class="fp-btn @(Eng.ActiveTool == Tool.Edit ? "active" : "")"
+                title="Edit / move" @onclick="() => SetTool(Tool.Edit)">✏️</button>
+        <button class="fp-btn @(Eng.ActiveTool == Tool.Remove ? "active" : "")"
+                title="Erase" @onclick="() => SetTool(Tool.Remove)">🧽</button>
+
+        <button class="fp-btn @(Eng.WallsLocked ? "active" : "")"
+                title="Lock walls (no move / delete / type / new)"
+                @onclick="() => Eng.ToggleLock()">@(Eng.WallsLocked ? "🔒" : "🔓")</button>
+
+        <button class="fp-btn" title="Undo (Ctrl+Z)" disabled="@(!Eng.CanUndo)"
+                @onclick="() => Eng.Undo()">↶</button>
+        <button class="fp-btn" title="Redo (Ctrl+Y)" disabled="@(!Eng.CanRedo)"
+                @onclick="() => Eng.Redo()">↷</button>
+
+        <div class="fp-spacer"></div>
+
+        <div class="fp-btn" title="Current floor"><small>F@(Eng.Plan.CurrentNumber)</small></div>
+        <button class="fp-btn" title="Next floor" @onclick="() => Eng.ChangeFloor(1)">⬆</button>
+        <button class="fp-btn" title="Previous floor" @onclick="() => Eng.ChangeFloor(-1)">⬇</button>
+        <button class="fp-btn" title="Delete floor" @onclick="() => Eng.DeleteFloor()">␡</button>
+
+        <div class="fp-spacer"></div>
+
+        <button class="fp-btn @(Eng.ActiveTool == Tool.Measure ? "active" : "")"
+                title="Measure tool" @onclick="() => SetTool(Tool.Measure)">📐</button>
+        <button class="fp-btn @(Eng.Snap ? "active" : "")"
+                title="Snap to grid" @onclick="() => Eng.SetSnap(!Eng.Snap)">▦</button>
+        <button class="fp-btn @(Eng.Plan.LabelsVisible ? "active" : "")"
+                title="Toggle size labels" @onclick="() => Eng.ToggleLabels()">🏷</button>
+        <button class="fp-btn @(Eng.ShowRoomArea ? "active" : "")"
+                title="Toggle room area display" @onclick="() => Eng.ToggleRoomArea()">📏</button>
+        <button class="fp-btn" title="Help" @onclick="() => _showHelp = !_showHelp">❔</button>
+        <button class="fp-btn" title="About" @onclick="() => _showAbout = !_showAbout">ℹ️</button>
+
+        <div class="fp-spacer"></div>
+
+        <button class="fp-btn" title="New plan" @onclick="NewPlan">📄</button>
+        <button class="fp-btn" title="Print" @onclick="Print">🖨</button>
+        <button class="fp-btn" title="Save plan" @onclick="SavePlan">💾</button>
+        <label class="fp-btn" title="Load plan" style="cursor:pointer">⬆️
+            <InputFile OnChange="LoadPlan" style="display:none" accept=".txt,.json" />
+        </label>
+    </div>
+
+    <div class="fp-canvas-wrap">
+        <canvas @ref="_canvas"
+                @onpointerdown="OnDown" @onpointermove="OnMove"
+                @onpointerup="OnUp" @onpointerleave="OnUp"
+                @onwheel="OnWheel" @onwheel:preventDefault
+                @onpointerdown:preventDefault
+                @oncontextmenu:preventDefault></canvas>
+
+        @if (!string.IsNullOrEmpty(Eng.Notification))
+        {
+            <div class="fp-notice">@Eng.Notification</div>
+        }
+
+        @if (_addMenu)
+        {
+            <div class="fp-menu" style="top:12px;">
+                <div class="fp-menu-sep">Draw wall (Esc / right-click cancels)</div>
+                <button @onclick="@(() => StartWall(WallType.Exterior))">@(TypeMark(WallType.Exterior)) 🧱 Exterior wall</button>
+                <button @onclick="@(() => StartWall(WallType.Interior))">@(TypeMark(WallType.Interior)) 🧱 Interior wall</button>
+                <button @onclick="@(() => StartWall(WallType.RoomDivider))">@(TypeMark(WallType.RoomDivider)) 🧱 Room divider</button>
+                <div class="fp-menu-sep"></div>
+                <button @onclick="OpenFurniture">🪑 Add furniture</button>
+                <div class="fp-menu-sep"></div>
+                <button @onclick="@(() => StartTool(Tool.FurnitureAddWindow, "Click a wall to add a window."))">🪟 Add window</button>
+                <button @onclick="@(() => StartTool(Tool.FurnitureAddDoor, "Click a wall to add a door. Right-click it to flip."))">🚪 Add door</button>
+                <button @onclick="StartRoomLabel">🏠 Add room label</button>
+            </div>
+        }
+
+        @if (_showHelp)
+        {
+            <div class="fp-drawer">
+                <button class="fp-close" @onclick="() => _showHelp = false">✕</button>
+                <h3>How to use</h3>
+                <p><b>+ menu</b> — add furniture, draw walls, add doors/windows.</p>
+                <p><b>Draw wall</b> — click empty space or an existing node to chain walls. Click the same node twice to finish. Click a wall to split it.</p>
+                <p><b>Edit</b> — drag walls/nodes; click furniture to select, then use the handles to move, resize and rotate.</p>
+                <p><b>Wall type</b> — pick Exterior / Interior / Room divider in the navbar. New walls use it; right-click a wall to apply it.</p>
+                <p><b>Lock</b> 🔓/🔒 — freezes all walls (no move, delete, type change or new walls).</p>
+                <p><b>Room label</b> — "+ → Add room label", then click inside a closed room and name it.</p>
+                <p><b>Room area</b> 📏 — shades each detected room and shows its m².</p>
+                <p><b>Right-click</b> furniture to flip it.</p>
+                <p><b>Erase</b> — click a wall, node, furniture or room label to delete it.</p>
+                <p><b>Delete key</b> removes the selected furniture. <b>Ctrl+Z</b> undoes, <b>Ctrl+Y</b> redoes.</p>
+                <p><b>Pan</b> — right-drag or middle-drag, or the View tool; the mouse wheel zooms. Arrow keys pan (or move the selected item). <b>Esc</b> deselects.</p>
+            </div>
+        }
+
+        @if (_showAbout)
+        {
+            <div class="fp-drawer">
+                <button class="fp-close" @onclick="() => _showAbout = false">✕</button>
+                <h3>About FloorBlaze</h3>
+                <p>A browser-based 2D floor-plan editor — walls, rooms, furniture,
+                   doors &amp; windows, multi-floor plans, save/load — built in
+                   C# / Blazor WebAssembly with an HTML5-canvas renderer.</p>
+                <p>Written by <b>Fredrik Karlsson</b>.</p>
+                <p>
+                    <a href="https://github.com/fredriksknese/" target="_blank" rel="noopener">GitHub</a>
+                    &nbsp;·&nbsp;
+                    <a href="https://www.linkedin.com/in/fredrik-karlsson/" target="_blank" rel="noopener">LinkedIn</a>
+                </p>
+            </div>
+        }
+
+        @if (_drawer)
+        {
+            <div class="fp-drawer">
+                <button class="fp-close" @onclick="() => _drawer = false">✕</button>
+                <h3>Add furniture</h3>
+                @foreach (var cat in Catalog.Categories)
+                {
+                    <div class="cat">@cat</div>
+                    @foreach (var item in Catalog.ByCategory(cat))
+                    {
+                        <div class="fp-item" @onclick="() => AddFurniture(item)">
+                            @if (!string.IsNullOrEmpty(item.ImagePath))
+                            {
+                                <img class="fp-thumb" src="@item.ImagePath" alt="@item.Name" />
+                            }
+                            <span class="fp-item-name">@item.Name</span>
+                            <span class="dim">@item.Width&times;@item.Height m</span>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly EditorEngine Eng = new();
+    private ElementReference _canvas;
+    private DotNetObjectReference<EditorPage>? _ref;
+    private bool _ready;
+    private bool _drawer;
+    private bool _addMenu;
+    private bool _showHelp;
+    private bool _showAbout;
+    private int _lastButton;
+
+    private string TypeMark(WallType t) => Eng.CurrentWallType == t ? "●" : "○";
+
+    protected override void OnInitialized()
+    {
+        Eng.Changed += OnEngineChanged;
+    }
+
+    private void OnEngineChanged() => InvokeAsync(Refresh);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("floorplan.observe", _canvas, _ref);
+            _ready = true;
+        }
+    }
+
+    [JSInvokable]
+    public void OnResize(double w, double h)
+    {
+        Eng.Resize(w, h);
+    }
+
+    [JSInvokable]
+    public Task OnRepaint() => Refresh();
+
+    [JSInvokable]
+    public void OnKey(string key, bool ctrl)
+    {
+        switch (key)
+        {
+            case "escape":
+                if (_addMenu) { _addMenu = false; StateHasChanged(); }
+                Eng.Deselect();
+                Eng.CancelWallChain();
+                break;
+            case "delete":
+                Eng.DeleteSelected();
+                break;
+            case "z" when ctrl:
+                Eng.Undo();
+                break;
+            case "y" when ctrl:
+                Eng.Redo();
+                break;
+            case "arrowleft":
+                Eng.ArrowKey(-1, 0);
+                break;
+            case "arrowright":
+                Eng.ArrowKey(1, 0);
+                break;
+            case "arrowup":
+                Eng.ArrowKey(0, -1);
+                break;
+            case "arrowdown":
+                Eng.ArrowKey(0, 1);
+                break;
+        }
+    }
+
+    private async Task Refresh()
+    {
+        if (_ready)
+        {
+            var scene = Eng.BuildScene();
+            await JS.InvokeVoidAsync("floorplan.render", _canvas, scene);
+        }
+        StateHasChanged();
+    }
+
+    private void SetTool(Tool t)
+    {
+        _addMenu = false;
+        Eng.SetTool(t);
+    }
+
+    private void StartTool(Tool t, string notice)
+    {
+        _addMenu = false;
+        Eng.SetTool(t);
+    }
+
+    private void ToggleAddMenu() => _addMenu = !_addMenu;
+
+    private void StartWall(WallType t)
+    {
+        _addMenu = false;
+        Eng.SetWallType(t);
+        Eng.SetTool(Tool.WallAdd);
+        Eng.SetNotice($"Drawing {EditorEngine.WallTypeName(t)} walls — Esc or right-click cancels");
+    }
+
+    private void StartRoomLabel()
+    {
+        _addMenu = false;
+        Eng.SetTool(Tool.RoomLabel);
+        Eng.SetNotice("Click inside a closed room to add a label");
+    }
+
+    private void OpenFurniture()
+    {
+        _addMenu = false;
+        _drawer = true;
+    }
+
+    private void AddFurniture(CatalogItem item)
+    {
+        Eng.AddCatalogFurniture(item);
+        Eng.SetTool(Tool.Edit);
+        _drawer = false;
+    }
+
+    private void NewPlan() => Eng.NewPlan();
+
+    private async Task OnDown(PointerEventArgs e)
+    {
+        _lastButton = (int)e.Button;
+        _addMenu = false;
+
+        if ((int)e.Button == 0 && Eng.ActiveTool == Tool.RoomLabel)
+        {
+            if (Eng.PointInAnyRoom(e.OffsetX, e.OffsetY))
+            {
+                var name = await JS.InvokeAsync<string?>("prompt", "Room name:", "Room");
+                if (name == null) return; // cancelled
+                Eng.AddRoomLabelAt(e.OffsetX, e.OffsetY, name);
+            }
+            else
+            {
+                Eng.SetNotice("Click inside a closed room to add a label");
+            }
+            return;
+        }
+
+        Eng.PointerDown((int)e.Button, e.OffsetX, e.OffsetY);
+    }
+
+    private void OnMove(PointerEventArgs e) => Eng.PointerMove(e.OffsetX, e.OffsetY);
+
+    private void OnUp(PointerEventArgs e)
+    {
+        int btn = e.Button >= 0 ? (int)e.Button : _lastButton;
+        Eng.PointerUp(btn, e.OffsetX, e.OffsetY);
+    }
+
+    private void OnWheel(WheelEventArgs e) => Eng.Wheel(e.DeltaY, e.OffsetX, e.OffsetY);
+
+    private async Task SavePlan()
+    {
+        var data = Eng.Save();
+        await JS.InvokeVoidAsync("floorplan.download", "floor_plan.txt", data);
+    }
+
+    private async Task Print()
+    {
+        await JS.InvokeVoidAsync("floorplan.print", _canvas);
+    }
+
+    private async Task LoadPlan(InputFileChangeEventArgs e)
+    {
+        using var reader = new StreamReader(e.File.OpenReadStream(8 * 1024 * 1024));
+        var text = await reader.ReadToEndAsync();
+        Eng.Load(text);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Eng.Changed -= OnEngineChanged;
+        _ref?.Dispose();
+        await ValueTask.CompletedTask;
+    }
+}
