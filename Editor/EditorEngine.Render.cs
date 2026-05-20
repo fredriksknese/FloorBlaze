@@ -319,30 +319,27 @@ public partial class EditorEngine
     private void DrawGrid(Scene s)
     {
         double step = Constants.METER;
-        double W = Constants.WORLD_SIZE;
         double left = Vp.CornerX;
         double top = Vp.CornerY;
         double right = Vp.CornerX + Vp.ScreenW / Vp.Scale;
         double bottom = Vp.CornerY + Vp.ScreenH / Vp.Scale;
 
-        // grid is confined to the world rectangle [0,W] on both axes so it
-        // stays a proper grid (not just verticals) when zoomed out / centered
-        double x0 = Math.Max(0, Math.Floor(left / step) * step);
-        double x1 = Math.Min(W, right);
+        double x0 = Math.Floor(left / step) * step;
+        double x1 = Math.Ceiling(right / step) * step;
         for (double x = x0; x <= x1 + 0.5; x += step)
         {
-            Pt a = Vp.WorldToScreen(x, 0);
-            Pt b = Vp.WorldToScreen(x, W);
-            bool major = Math.Abs(x % (5 * step)) < 0.5;
+            Pt a = Vp.WorldToScreen(x, top);
+            Pt b = Vp.WorldToScreen(x, bottom);
+            bool major = Math.Abs(Math.IEEERemainder(x, 5 * step)) < 0.5;
             s.LineScreen(a.X, a.Y, b.X, b.Y, major ? "#9aa6b5" : "#c6ccd6", major ? 1.5 : 1);
         }
-        double y0 = Math.Max(0, Math.Floor(top / step) * step);
-        double y1 = Math.Min(W, bottom);
+        double y0 = Math.Floor(top / step) * step;
+        double y1 = Math.Ceiling(bottom / step) * step;
         for (double y = y0; y <= y1 + 0.5; y += step)
         {
-            Pt a = Vp.WorldToScreen(0, y);
-            Pt b = Vp.WorldToScreen(W, y);
-            bool major = Math.Abs(y % (5 * step)) < 0.5;
+            Pt a = Vp.WorldToScreen(left, y);
+            Pt b = Vp.WorldToScreen(right, y);
+            bool major = Math.Abs(Math.IEEERemainder(y, 5 * step)) < 0.5;
             s.LineScreen(a.X, a.Y, b.X, b.Y, major ? "#9aa6b5" : "#c6ccd6", major ? 1.5 : 1);
         }
     }
