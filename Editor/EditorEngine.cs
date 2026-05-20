@@ -1005,9 +1005,11 @@ public partial class EditorEngine
             {
                 double dist = Math.Max(1, Geometry.EuclideanDistance(mw.X, _hStartCenter.X, mw.Y, _hStartCenter.Y));
                 double ratio = dist / _hStartDist;
-                if (_dragHandle != HandleType.Vertical)
+                // doors scale uniformly — width and swing radius stay in proportion
+                bool uniform = f.IsDoor;
+                if (_dragHandle != HandleType.Vertical || uniform)
                     f.ScaleX = Math.Sign(_hStartScaleX == 0 ? 1 : _hStartScaleX) * Math.Max(0.1, Math.Abs(_hStartScaleX) * ratio);
-                if (_dragHandle != HandleType.Horizontal)
+                if (_dragHandle != HandleType.Horizontal || uniform)
                     f.ScaleY = Math.Sign(_hStartScaleY == 0 ? 1 : _hStartScaleY) * Math.Max(0.1, Math.Abs(_hStartScaleY) * ratio);
 
                 // attached window: keep the visible rect within the wall length and reposition
@@ -1016,7 +1018,10 @@ public partial class EditorEngine
                 {
                     double maxScale = f.AttachedTo.Length / Math.Max(1, f.Width);
                     if (Math.Abs(f.ScaleX) > maxScale)
+                    {
                         f.ScaleX = Math.Sign(f.ScaleX) * maxScale;
+                        if (uniform) f.ScaleY = Math.Sign(f.ScaleY) * maxScale;
+                    }
                     double effW = f.Width * Math.Abs(f.ScaleX);
                     double minX = (effW - f.Width) / 2;
                     double maxX = f.AttachedTo.Length - (f.Width + effW) / 2;

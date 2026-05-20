@@ -201,6 +201,18 @@ public partial class EditorEngine
             s.Rect(m, size, size, "#000000");
         }
 
+        // cut the wall where doors sit so the opening is visible
+        foreach (var f in Plan.Current.FurnitureMap.Values)
+        {
+            if (!f.IsDoor || !f.IsAttached || f.AttachedTo == null) continue;
+            double effW = f.Width * Math.Abs(f.ScaleX);
+            double left = f.X + (f.Width - effW) / 2;
+            Mat cm = Vp.BaseMatrix
+                .Mul(f.AttachedTo.LocalMatrix())
+                .Mul(Mat.Translate(left, 0));
+            s.Rect(cm, effW, f.AttachedTo.Thickness, "#ebebeb");
+        }
+
         // furniture (z order)
         foreach (var f in Plan.Current.FurnitureMap.Values.OrderBy(f => f.ZIndex))
         {
