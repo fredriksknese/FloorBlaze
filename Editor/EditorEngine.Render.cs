@@ -173,7 +173,8 @@ public partial class EditorEngine
             }
         }
 
-        // walls
+        // walls — rendered as 4-point mitered polygons so corners fuse cleanly
+        // at any angle (no gap on the outside, no overlap on the inside)
         foreach (var w in seq.Walls)
         {
             if (w.Type == WallType.RoomDivider)
@@ -185,20 +186,25 @@ public partial class EditorEngine
             }
             else
             {
-                Mat m = Vp.BaseMatrix.Mul(w.LocalMatrix());
-                s.Rect(m, w.Length, w.Thickness, WallFill(w.Type), "#0d0e10", 1);
+                var corners = WallGeometry.ComputePolygon(w, seq);
+                var screen = new Pt[corners.Length];
+                for (int i = 0; i < corners.Length; i++)
+                    screen[i] = Vp.WorldToScreen(corners[i].X, corners[i].Y);
+                s.PolygonScreen(screen, WallFill(w.Type), "#0d0e10", 1);
             }
         }
 
-        // wall nodes — match wall colour (black) and visual width (thickness + 1 px stroke)
+        // fill the central hollow at junctions where 3+ walls meet — each wall
+        // polygon ends at its corner bisector, leaving an interior gap that we
+        // close here so the junction reads as solid
         foreach (var n in seq.Nodes.Values)
         {
-            double size = n.Size + 1;
-            Mat m = Vp.BaseMatrix
-                .Mul(Mat.Translate(n.X, n.Y))
-                .Mul(Mat.Rotate(n.AngleRad))
-                .Mul(Mat.Translate(-size / 2, -size / 2));
-            s.Rect(m, size, size, "#000000");
+            var hollow = WallGeometry.ComputeNodeFill(n, seq);
+            if (hollow == null) continue;
+            var screen = new Pt[hollow.Length];
+            for (int i = 0; i < hollow.Length; i++)
+                screen[i] = Vp.WorldToScreen(hollow[i].X, hollow[i].Y);
+            s.PolygonScreen(screen, "#000000", null, 0);
         }
 
         // cut the wall where doors sit so the opening is visible — extend slightly past
@@ -283,8 +289,20 @@ public partial class EditorEngine
             }
             else if (_hoverWall != null && Plan.Current.Seq.Walls.Contains(_hoverWall))
             {
-                Mat hm = Vp.BaseMatrix.Mul(_hoverWall.LocalMatrix());
-                s.Rect(hm, _hoverWall.Length, _hoverWall.Thickness, null, hi, 2.5);
+                if (_hoverWall.Type == WallType.RoomDivider)
+                {
+                    Pt a = Vp.WorldToScreen(_hoverWall.X1, _hoverWall.Y1);
+                    Pt b = Vp.WorldToScreen(_hoverWall.X2, _hoverWall.Y2);
+                    s.LineScreen(a.X, a.Y, b.X, b.Y, hi, 2.5);
+                }
+                else
+                {
+                    var corners = WallGeometry.ComputePolygon(_hoverWall, Plan.Current.Seq);
+                    var screen = new Pt[corners.Length];
+                    for (int i = 0; i < corners.Length; i++)
+                        screen[i] = Vp.WorldToScreen(corners[i].X, corners[i].Y);
+                    s.PolygonScreen(screen, null, hi, 2.5);
+                }
             }
         }
 
