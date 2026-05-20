@@ -76,12 +76,18 @@ public class Floor
             fur.AttachedToLeft = attachedTo.LeftNode.Id;
             fur.AttachedToRight = attachedTo.RightNode.Id;
             fur.X = coords.X;
-            // doors: shifted so the SVG frame sits *over* the wall band. The exterior and interior
-            // door SVGs have different frame proportions, so the offset depends on the wall type.
-            // windows: centred in the wall band (a window lives inside the wall thickness)
-            fur.Y = fur.IsDoor
-                ? (attachedTo.Type == WallType.Exterior ? -25 : -10)
-                : attachedTo.Thickness / 2 - fur.Height / 2;
+            if (fur.Key == "window")
+            {
+                fur.Height = attachedTo.Thickness;
+                fur.Y = attachedTo.Thickness / 2 - fur.Height / 2;
+            }
+            else if (fur.Key == "door")
+            {
+                // Scale the door so the SVG <rect id="wall"> (25 of 133 SVG units tall)
+                // exactly matches the wall thickness. The frame stays *in* the wall.
+                fur.Height = attachedTo.Thickness * 133.0 / 25.0;
+                fur.Y = 0;
+            }
         }
         else
         {

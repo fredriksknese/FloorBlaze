@@ -21,6 +21,7 @@ public class DrawCmd
     public double Fs { get; set; }
     public string? Al { get; set; }
     public double[]? Pts { get; set; }
+    public double[]? Dash { get; set; }
 }
 
 public class Scene
@@ -36,8 +37,8 @@ public class Scene
     public void RectScreen(double x, double y, double w, double h, string? fill, string? stroke = null, double lw = 1)
         => Cmds.Add(new DrawCmd { T = "rect", X = x, Y = y, W = w, H = h, Fill = fill, Stroke = stroke, Lw = lw });
 
-    public void LineScreen(double x1, double y1, double x2, double y2, string stroke, double lw = 1)
-        => Cmds.Add(new DrawCmd { T = "line", X = x1, Y = y1, X2 = x2, Y2 = y2, Stroke = stroke, Lw = lw });
+    public void LineScreen(double x1, double y1, double x2, double y2, string stroke, double lw = 1, double[]? dash = null)
+        => Cmds.Add(new DrawCmd { T = "line", X = x1, Y = y1, X2 = x2, Y2 = y2, Stroke = stroke, Lw = lw, Dash = dash });
 
     public void CircleScreen(double x, double y, double r, string? fill, string? stroke = null, double lw = 1)
         => Cmds.Add(new DrawCmd { T = "circle", X = x, Y = y, W = r, Fill = fill, Stroke = stroke, Lw = lw });

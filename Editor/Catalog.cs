@@ -11,7 +11,9 @@ public record CatalogItem(
     double Height,  // meters
     string Fill,
     string Symbol,        // short glyph drawn when there is no image
-    string ImagePath = "" // relative svg path under wwwroot, "" = custom-drawn
+    string ImagePath = "", // relative svg path under wwwroot, "" = custom-drawn
+    double? PivotX = null, // meters, null = box centre
+    double? PivotY = null
 );
 
 public static partial class Catalog

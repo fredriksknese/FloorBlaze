@@ -12,7 +12,11 @@ public class Furniture
     public double Width;   // pixels
     public double Height;  // pixels
 
-    // free furniture: (X,Y) is the centre in world coords.
+    // pivot in furniture-local pixels — rotation centre, defaults to box centre
+    public double PivotX;
+    public double PivotY;
+
+    // free furniture: (X,Y) is the world position of the pivot.
     // attached furniture: (X,Y) is local to the parent wall band.
     public double X;
     public double Y;
@@ -37,22 +41,11 @@ public class Furniture
         ImagePath = item.ImagePath;
         Width = item.Width * Constants.METER;
         Height = item.Height * Constants.METER;
+        PivotX = (item.PivotX ?? item.Width / 2) * Constants.METER;
+        PivotY = (item.PivotY ?? item.Height / 2) * Constants.METER;
     }
 
-    public bool HasImage => !string.IsNullOrEmpty(EffectiveImagePath);
-
-    // attached doors use a different SVG depending on the wall's type
-    public string EffectiveImagePath
-    {
-        get
-        {
-            if (IsDoor && IsAttached && AttachedTo != null)
-                return AttachedTo.Type == WallType.Exterior
-                    ? "furniture/door-exterior.svg"
-                    : "furniture/door-interior.svg";
-            return ImagePath;
-        }
-    }
+    public bool HasImage => !string.IsNullOrEmpty(ImagePath);
 
     public bool IsDoor => Key == "door";
     public bool IsWindow => Key == "window";
@@ -71,20 +64,28 @@ public class Furniture
     {
         if (IsAttached && AttachedTo != null)
         {
-            // x is centre-pivot so an orientation flip doesn't shift the door along the wall.
-            // for doors, y is edge-pivot at the wall face so flipping ScaleY puts the door
-            // on the other side of the wall (always opening outward).
-            // for windows, y is centre-pivot so stretching grows symmetrically about the centre.
-            double ya = IsDoor ? 0 : Height / 2;
+            if (IsDoor)
+            {
+                // Doors: anchor x at the door's centre along the wall (flip-in-place hinge swap)
+                // and pivot y on the wall centreline so ScaleY=-1 keeps the SVG wall rect on the
+                // wall while flipping the swing arc to the other room.
+                double t = AttachedTo.Thickness;
+                return AttachedTo.LocalMatrix()
+                    .Mul(Mat.Translate(X + Width / 2, t / 2))
+                    .Mul(Mat.Scale(ScaleX, ScaleY))
+                    .Mul(Mat.Translate(-Width / 2, -t / 2));
+            }
+            // attached windows: scale around the centre so stretching grows
+            // symmetrically about the centre and orientation flips stay in place
             return AttachedTo.LocalMatrix()
-                .Mul(Mat.Translate(X + Width / 2, Y + ya))
+                .Mul(Mat.Translate(X + Width / 2, Y + Height / 2))
                 .Mul(Mat.Scale(ScaleX, ScaleY))
-                .Mul(Mat.Translate(-Width / 2, -ya));
+                .Mul(Mat.Translate(-Width / 2, -Height / 2));
         }
         return Mat.Translate(X, Y)
             .Mul(Mat.Rotate(Rotation))
             .Mul(Mat.Scale(ScaleX, ScaleY))
-            .Mul(Mat.Translate(-Width / 2, -Height / 2));
+            .Mul(Mat.Translate(-PivotX, -PivotY));
     }
 
     public bool HitTest(Pt world)

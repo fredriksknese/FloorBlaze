@@ -176,8 +176,18 @@ public partial class EditorEngine
         // walls
         foreach (var w in seq.Walls)
         {
-            Mat m = Vp.BaseMatrix.Mul(w.LocalMatrix());
-            s.Rect(m, w.Length, w.Thickness, WallFill(w.Type), "#0d0e10", 1);
+            if (w.Type == WallType.RoomDivider)
+            {
+                // dashed centreline — a room divider is a notional boundary, not a real wall
+                Pt a = Vp.WorldToScreen(w.X1, w.Y1);
+                Pt b = Vp.WorldToScreen(w.X2, w.Y2);
+                s.LineScreen(a.X, a.Y, b.X, b.Y, "#0d0e10", 1.5, new double[] { 10, 6 });
+            }
+            else
+            {
+                Mat m = Vp.BaseMatrix.Mul(w.LocalMatrix());
+                s.Rect(m, w.Length, w.Thickness, WallFill(w.Type), "#0d0e10", 1);
+            }
         }
 
         // wall nodes — match wall colour (black) and visual width (thickness + 1 px stroke)
@@ -199,7 +209,7 @@ public partial class EditorEngine
 
             if (f.HasImage)
             {
-                s.Image(m, f.Width, f.Height, f.EffectiveImagePath);
+                s.Image(m, f.Width, f.Height, f.ImagePath);
             }
             else if (f.IsCompass)
             {

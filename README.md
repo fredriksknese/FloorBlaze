@@ -33,11 +33,11 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
 
 ### Furniture
 - ~60 furniture items across Bedroom, Bathroom, Kitchen, Office, Living Room,
-  Other and Structural categories, plus **doors**, **windows** and a **compass**.
+  Other and Structural categories, plus **windows** and a **compass**.
 - Real **SVG icons**, rendered under each object's transform.
 - Select, **move**, **resize**, and **rotate** via on-object handles.
 - Rotation snaps to **1°** with **sticky 45°** stops; live degree readout.
-- Doors/windows attach to walls and slide along them.
+- Windows attach to walls and slide along them.
 - Right-click furniture to flip its orientation.
 
 ### Editing & navigation

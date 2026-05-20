@@ -86,7 +86,10 @@ window.floorplan = (function () {
                     ctx.lineTo(num(c.x2, c.X2), num(c.y2, c.Y2));
                     ctx.lineWidth = lw;
                     ctx.strokeStyle = stroke || '#000';
+                    const dash = c.dash || c.Dash;
+                    if (dash) ctx.setLineDash(dash);
                     ctx.stroke();
+                    if (dash) ctx.setLineDash([]);
                 } else if (t === 'circle') {
                     ctx.beginPath();
                     ctx.arc(x, y, num(c.w, c.W), 0, Math.PI * 2);

@@ -878,7 +878,7 @@ public partial class EditorEngine
 
         if (Selected.IsAttached)
         {
-            // doors and windows can both be stretched along the wall
+            // attached windows can be stretched along the wall
             var (rx2, ry2) = P(hw, 0);
             yield return (HandleType.Horizontal, rx2, ry2);
             yield break;
@@ -933,7 +933,9 @@ public partial class EditorEngine
         _hStartScaleY = f.ScaleY;
         _hStartRot = f.Rotation;
         _hStartLocalX = f.X;
-        Pt cw = SelectedCenterWorld();
+        // rotation pivots on the configured pivot point (= (f.X, f.Y) by construction);
+        // resize uses the box centre as the scale anchor
+        Pt cw = h == HandleType.Rotate ? new Pt(f.X, f.Y) : SelectedCenterWorld();
         _hStartCenter = cw;
         Pt mw = Vp.ScreenToWorld(sx, sy);
         _hStartDist = Math.Max(1, Geometry.EuclideanDistance(mw.X, cw.X, mw.Y, cw.Y));
@@ -965,9 +967,16 @@ public partial class EditorEngine
                 }
                 else
                 {
-                    Pt w = SnapWorld(mw);
-                    f.X = w.X;
-                    f.Y = w.Y;
+                    // keep the box centre under the cursor; (f.X, f.Y) is the pivot in world
+                    double dxL = f.Width / 2 - f.PivotX;
+                    double dyL = f.Height / 2 - f.PivotY;
+                    double cos = Math.Cos(f.Rotation);
+                    double sin = Math.Sin(f.Rotation);
+                    double dxW = cos * f.ScaleX * dxL - sin * f.ScaleY * dyL;
+                    double dyW = sin * f.ScaleX * dxL + cos * f.ScaleY * dyL;
+                    Pt center = SnapWorld(mw);
+                    f.X = center.X - dxW;
+                    f.Y = center.Y - dyW;
                 }
                 break;
 

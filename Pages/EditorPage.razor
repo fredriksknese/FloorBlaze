@@ -4,7 +4,7 @@
 
 <div class="fp-root">
     <div class="fp-toolbar">
-        <button class="fp-btn" title="Add (furniture / wall / door / window)"
+        <button class="fp-btn" title="Add (furniture / wall / window)"
                 @onclick="ToggleAddMenu">+</button>
 
         <button class="fp-btn @(Eng.ActiveTool == Tool.View ? "active" : "")"
@@ -59,6 +59,7 @@
                 @onpointerup="OnUp" @onpointerleave="OnUp"
                 @onwheel="OnWheel" @onwheel:preventDefault
                 @onpointerdown:preventDefault
+                @onmousedown:preventDefault
                 @oncontextmenu:preventDefault></canvas>
 
         @if (!string.IsNullOrEmpty(Eng.Notification))
@@ -77,7 +78,7 @@
                 <button @onclick="OpenFurniture">🪑 Add furniture</button>
                 <div class="fp-menu-sep"></div>
                 <button @onclick="@(() => StartTool(Tool.FurnitureAddWindow, "Click a wall to add a window."))">🪟 Add window</button>
-                <button @onclick="@(() => StartTool(Tool.FurnitureAddDoor, "Click a wall to add a door. Right-click it to flip."))">🚪 Add door</button>
+                <button @onclick="@(() => StartTool(Tool.FurnitureAddDoor, "Click a wall to add a door. Right-click it to swing the other way."))">🚪 Add door</button>
                 <button @onclick="StartRoomLabel">🏠 Add room label</button>
             </div>
         }
@@ -87,7 +88,7 @@
             <div class="fp-drawer">
                 <button class="fp-close" @onclick="() => _showHelp = false">✕</button>
                 <h3>How to use</h3>
-                <p><b>+ menu</b> — add furniture, draw walls, add doors/windows.</p>
+                <p><b>+ menu</b> — add furniture, draw walls, add windows.</p>
                 <p><b>Draw wall</b> — click empty space or an existing node to chain walls. Click the same node twice to finish. Click a wall to split it.</p>
                 <p><b>Edit</b> — drag walls/nodes; click furniture to select, then use the handles to move, resize and rotate.</p>
                 <p><b>Wall type</b> — pick Exterior / Interior / Room divider in the navbar. New walls use it; right-click a wall to apply it.</p>
@@ -107,7 +108,7 @@
                 <button class="fp-close" @onclick="() => _showAbout = false">✕</button>
                 <h3>About FloorBlaze</h3>
                 <p>A browser-based 2D floor-plan editor — walls, rooms, furniture,
-                   doors &amp; windows, multi-floor plans, save/load — built in
+                   windows, multi-floor plans, save/load — built in
                    C# / Blazor WebAssembly with an HTML5-canvas renderer.</p>
                 <p>Written by <b>Fredrik Karlsson</b>.</p>
                 <p>
@@ -282,7 +283,7 @@
     {
         Eng.AddCatalogFurniture(item);
         Eng.SetTool(Tool.Edit);
-        _drawer = false;
+        // keep the furniture drawer open so the user can keep adding pieces
     }
 
     private void NewPlan() => Eng.NewPlan();
