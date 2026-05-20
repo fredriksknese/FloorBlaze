@@ -272,13 +272,25 @@ public partial class EditorEngine
         {
             var tgt = ResolveWallTarget(_mouseWorld);
             Pt bw = tgt.Point;
+            // any wall-endpoint snap guides activated by the resolve call
+            DrawSnapGuides(s);
             if (_wallPreviewStart.HasValue)
             {
-                Pt a = Vp.WorldToScreen(_wallPreviewStart.Value.X, _wallPreviewStart.Value.Y);
+                Pt ws = _wallPreviewStart.Value;
+                double dxw = bw.X - ws.X, dyw = bw.Y - ws.Y;
+                double len = Math.Sqrt(dxw * dxw + dyw * dyw);
+                if (len > 0.5)
+                {
+                    double theta = Math.Atan2(dyw, dxw);
+                    double thick = Wall.ThicknessFor(CurrentWallType);
+                    Mat m = Vp.BaseMatrix
+                        .Mul(Mat.Translate(ws.X, ws.Y))
+                        .Mul(Mat.Rotate(theta))
+                        .Mul(Mat.Translate(0, -thick / 2));
+                    s.Rect(m, len, thick, WallFill(CurrentWallType), "#0d0e10", 1);
+                }
+                Pt a = Vp.WorldToScreen(ws.X, ws.Y);
                 Pt b = Vp.WorldToScreen(bw.X, bw.Y);
-                s.LineScreen(a.X, a.Y, b.X, b.Y, "#1f1f1f", 2);
-                double len = Geometry.EuclideanDistance(_wallPreviewStart.Value.X, bw.X,
-                                                        _wallPreviewStart.Value.Y, bw.Y);
                 s.TextScreen((a.X + b.X) / 2, (a.Y + b.Y) / 2 - 10, Meters(len), "#1f1f1f", 13);
             }
             // magnet highlight on the node we'd snap to
@@ -341,6 +353,26 @@ public partial class EditorEngine
             Pt b = Vp.WorldToScreen(right, y);
             bool major = Math.Abs(Math.IEEERemainder(y, 5 * step)) < 0.5;
             s.LineScreen(a.X, a.Y, b.X, b.Y, major ? "#9aa6b5" : "#c6ccd6", major ? 1.5 : 1);
+        }
+    }
+
+    private void DrawSnapGuides(Scene s)
+    {
+        if (_activeGuides.Count == 0) return;
+        double left = Vp.CornerX;
+        double top = Vp.CornerY;
+        double right = Vp.CornerX + Vp.ScreenW / Vp.Scale;
+        double bottom = Vp.CornerY + Vp.ScreenH / Vp.Scale;
+        double diag = Math.Sqrt((right - left) * (right - left) + (bottom - top) * (bottom - top));
+        foreach (var (origin, dir) in _activeGuides)
+        {
+            Pt a = new(origin.X - dir.X * diag, origin.Y - dir.Y * diag);
+            Pt b = new(origin.X + dir.X * diag, origin.Y + dir.Y * diag);
+            Pt sa = Vp.WorldToScreen(a.X, a.Y);
+            Pt sb = Vp.WorldToScreen(b.X, b.Y);
+            s.LineScreen(sa.X, sa.Y, sb.X, sb.Y, "#90caf9", 1);
+            Pt so = Vp.WorldToScreen(origin.X, origin.Y);
+            s.CircleScreen(so.X, so.Y, 3, "#1565c0");
         }
     }
 

@@ -1,4 +1,6 @@
+using System.Text.Json;
 using FloorPlan.Editor.Model;
+using FloorPlan.Editor.Persistence;
 
 namespace FloorPlan.Editor;
 
@@ -133,14 +135,17 @@ public partial class EditorEngine
     {
         WallNodeSequence.ResetIdCounter();
         Plan = new FloorPlanModel();
+        _undo.Clear();
+        _redo.Clear();
         ResetTools();
+        MutationVersion++;
         Notify("New plan");
     }
 
     public void Resize(double w, double h) { Vp.Resize(w, h); Changed?.Invoke(); }
 
     // ---- floor controls ----
-    public void ChangeFloor(int by) { Plan.ChangeFloor(by); ResetTools(); Notify(); }
+    public void ChangeFloor(int by) { Plan.ChangeFloor(by); ResetTools(); MutationVersion++; Notify(); }
     public void DeleteFloor()
     {
         int before = _undo.Count;
@@ -159,12 +164,58 @@ public partial class EditorEngine
         {
             WallNodeSequence.ResetIdCounter();
             Plan.Load(text);
+            _undo.Clear();
+            _redo.Clear();
             ResetTools();
+            MutationVersion++;
             Notify("Plan loaded");
         }
         catch (Exception e)
         {
             Notify("Could not load file: " + e.Message);
+        }
+    }
+
+    // bumped on any mutation that changes plan content or undo/redo stacks.
+    // EditorPage watches this to autosave the full state to the browser
+    public int MutationVersion { get; private set; }
+
+    public string SaveFullState()
+    {
+        var fs = new FullStateSerializable
+        {
+            plan = Plan.Save(),
+            floor = Plan.CurrentNumber,
+        };
+        foreach (var (json, floor) in _undo)
+            fs.undo.Add(new HistoryEntrySerializable { json = json, floor = floor });
+        foreach (var (json, floor) in _redo)
+            fs.redo.Add(new HistoryEntrySerializable { json = json, floor = floor });
+        return JsonSerializer.Serialize(fs);
+    }
+
+    public bool TryLoadFullState(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        try
+        {
+            var fs = JsonSerializer.Deserialize<FullStateSerializable>(text);
+            if (fs == null || string.IsNullOrEmpty(fs.plan)) return false;
+            WallNodeSequence.ResetIdCounter();
+            Plan.Load(fs.plan);
+            Plan.SetFloor(fs.floor);
+            _undo.Clear();
+            foreach (var e in fs.undo) _undo.Add((e.json, e.floor));
+            _redo.Clear();
+            foreach (var e in fs.redo) _redo.Add((e.json, e.floor));
+            ResetTools();
+            MutationVersion++;
+            Changed?.Invoke();
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -182,6 +233,7 @@ public partial class EditorEngine
         _undo.Add(snap);
         if (_undo.Count > UNDO_MAX) _undo.RemoveAt(0);
         _redo.Clear();
+        MutationVersion++;
     }
 
     private void ApplyState((string json, int floor) st)
@@ -202,6 +254,7 @@ public partial class EditorEngine
         var st = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
         ApplyState(st);
+        MutationVersion++;
         Notify("Undo");
     }
 
@@ -212,6 +265,7 @@ public partial class EditorEngine
         var st = _redo[^1];
         _redo.RemoveAt(_redo.Count - 1);
         ApplyState(st);
+        MutationVersion++;
         Notify("Redo");
     }
 
@@ -579,10 +633,15 @@ public partial class EditorEngine
         public Pt Point;
     }
 
+    // snap guides activated by the most recent ResolveWallTarget call — rendered as faint lines
+    private readonly List<(Pt origin, Pt dir)> _activeGuides = new();
+    public IReadOnlyList<(Pt origin, Pt dir)> ActiveGuides => _activeGuides;
+
     private double SnapVal(double v) => Snap ? Geometry.Snap(v) : Math.Truncate(v);
 
     public WallTarget ResolveWallTarget(Pt world)
     {
+        _activeGuides.Clear();
         var seq = Plan.Current.Seq;
 
         // 1. magnet to the nearest existing node (corner / wall end)
@@ -597,7 +656,12 @@ public partial class EditorEngine
         }
         if (best != null) return new WallTarget { Node = best, Point = new Pt(best.X, best.Y) };
 
-        // 2. angle snapping relative to the chain's previous node
+        // 2. wall-endpoint snap guides: at each endpoint, a "cross" of the wall's
+        //    direction and its perpendicular — makes parallel + equal-length walls easy
+        var guides = CollectWallGuides(seq);
+        double gtol = NODE_SNAP_PX / Math.Max(0.0001, Vp.Scale);
+
+        // 3. angle snapping relative to the chain's previous node, combined with guides
         if (_prevNodeId != null && seq.Nodes.TryGetValue(_prevNodeId.Value, out var prev))
         {
             double dx = world.X - prev.X;
@@ -608,32 +672,118 @@ public partial class EditorEngine
                 double deg = Math.Atan2(dy, dx) * 180.0 / Math.PI; // -180..180
                 double n360 = (deg % 360 + 360) % 360;
 
-                // nearest ortho axis (0/90/180/270)
                 double ortho = Math.Round(n360 / 90.0) * 90.0;
                 double dOrtho = Math.Abs(((n360 - ortho + 540) % 360) - 180);
-                if (dOrtho <= ORTHO_TOL_DEG)
-                {
-                    bool horizontal = ((int)Math.Round(ortho / 90.0)) % 2 == 0;
-                    return horizontal
-                        ? new WallTarget { Point = new Pt(SnapVal(world.X), prev.Y) }
-                        : new WallTarget { Point = new Pt(prev.X, SnapVal(world.Y)) };
-                }
-
-                // nearest 45° diagonal
                 double diag = Math.Round(n360 / 45.0) * 45.0;
                 double dDiag = Math.Abs(((n360 - diag + 540) % 360) - 180);
-                if (dDiag <= DIAG_TOL_DEG)
+
+                Pt? chainDir = null;
+                bool isOrtho = false;
+                if (dOrtho <= ORTHO_TOL_DEG)
                 {
-                    double len = SnapVal((Math.Abs(dx) + Math.Abs(dy)) / 2.0);
-                    double sx = dx >= 0 ? 1 : -1;
-                    double sy = dy >= 0 ? 1 : -1;
-                    return new WallTarget { Point = new Pt(prev.X + sx * len, prev.Y + sy * len) };
+                    double rad = ortho * Math.PI / 180.0;
+                    chainDir = new Pt(Math.Cos(rad), Math.Sin(rad));
+                    isOrtho = true;
+                }
+                else if (dDiag <= DIAG_TOL_DEG)
+                {
+                    double rad = diag * Math.PI / 180.0;
+                    chainDir = new Pt(Math.Cos(rad), Math.Sin(rad));
+                }
+
+                if (chainDir != null)
+                {
+                    // snap to intersection of chain ray with a guide line, if any is close to the cursor
+                    Pt prevPt = new(prev.X, prev.Y);
+                    Pt? hit = null;
+                    (Pt o, Pt d) bestG = default;
+                    double bestHitD = gtol;
+                    foreach (var g in guides)
+                    {
+                        if (!TryIntersectLines(prevPt, chainDir.Value, g.origin, g.dir, out var X)) continue;
+                        double d = Geometry.EuclideanDistance(world.X, X.X, world.Y, X.Y);
+                        if (d <= bestHitD) { bestHitD = d; hit = X; bestG = g; }
+                    }
+                    if (hit != null)
+                    {
+                        _activeGuides.Add(bestG);
+                        return new WallTarget { Point = hit.Value };
+                    }
+
+                    if (isOrtho)
+                    {
+                        bool horizontal = ((int)Math.Round(ortho / 90.0)) % 2 == 0;
+                        return horizontal
+                            ? new WallTarget { Point = new Pt(SnapVal(world.X), prev.Y) }
+                            : new WallTarget { Point = new Pt(prev.X, SnapVal(world.Y)) };
+                    }
+                    else
+                    {
+                        double len = SnapVal((Math.Abs(dx) + Math.Abs(dy)) / 2.0);
+                        double sx = dx >= 0 ? 1 : -1;
+                        double sy = dy >= 0 ? 1 : -1;
+                        return new WallTarget { Point = new Pt(prev.X + sx * len, prev.Y + sy * len) };
+                    }
                 }
             }
         }
+        else
+        {
+            // not chaining: project cursor onto the nearest guide line if close enough
+            (Pt o, Pt d)? bestG = null;
+            Pt bestProj = default;
+            double bestProjD = gtol;
+            foreach (var g in guides)
+            {
+                Pt P = ProjectOntoLine(world, g.origin, g.dir);
+                double d = Geometry.EuclideanDistance(world.X, P.X, world.Y, P.Y);
+                if (d <= bestProjD) { bestProjD = d; bestProj = P; bestG = g; }
+            }
+            if (bestG != null)
+            {
+                _activeGuides.Add(bestG.Value);
+                return new WallTarget { Point = bestProj };
+            }
+        }
 
-        // 3. plain grid snap
+        // 4. plain grid snap
         return new WallTarget { Point = new Pt(SnapVal(world.X), SnapVal(world.Y)) };
+    }
+
+    private List<(Pt origin, Pt dir)> CollectWallGuides(WallNodeSequence seq)
+    {
+        var list = new List<(Pt, Pt)>();
+        foreach (var w in seq.Walls)
+        {
+            Pt along = new(Math.Cos(w.ThetaRad), Math.Sin(w.ThetaRad));
+            Pt perp = new(-along.Y, along.X);
+            AddGuidesForNode(list, w.LeftNode, along, perp);
+            AddGuidesForNode(list, w.RightNode, along, perp);
+        }
+        return list;
+    }
+
+    private void AddGuidesForNode(List<(Pt, Pt)> list, WallNode n, Pt along, Pt perp)
+    {
+        if (_prevNodeId == n.Id) return; // guides through the chain's anchor add no info
+        list.Add((new Pt(n.X, n.Y), along));
+        list.Add((new Pt(n.X, n.Y), perp));
+    }
+
+    private static Pt ProjectOntoLine(Pt p, Pt origin, Pt dir)
+    {
+        double t = (p.X - origin.X) * dir.X + (p.Y - origin.Y) * dir.Y;
+        return new Pt(origin.X + t * dir.X, origin.Y + t * dir.Y);
+    }
+
+    private static bool TryIntersectLines(Pt o1, Pt d1, Pt o2, Pt d2, out Pt result)
+    {
+        double det = d1.X * (-d2.Y) - d1.Y * (-d2.X);
+        if (Math.Abs(det) < 1e-9) { result = default; return false; }
+        double dx = o2.X - o1.X, dy = o2.Y - o1.Y;
+        double t = (dx * (-d2.Y) - dy * (-d2.X)) / det;
+        result = new Pt(o1.X + t * d1.X, o1.Y + t * d1.Y);
+        return true;
     }
 
     public Pt WallPreviewPoint() => ResolveWallTarget(_mouseWorld).Point;

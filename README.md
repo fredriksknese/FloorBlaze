@@ -19,6 +19,11 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
   the **+** menu; right-click a wall to re-apply the current type.
 - **Magnetic snapping**: snaps to existing corners/endpoints, and to
   **horizontal / vertical / 45°** so straight and right-angle walls are easy.
+- **Wall-endpoint guides**: each existing endpoint emits an invisible "cross"
+  of its wall's direction + perpendicular. The cursor snaps onto these,
+  making **parallel walls of equal length** a one-click affair.
+- **Live preview** — while drawing, the next wall is previewed at its real
+  thickness and type, not a thin line.
 - **Lock** 🔒 — freezes all walls (no move, delete, type change, or new walls).
 
 ### Rooms
@@ -48,6 +53,9 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
 ### Plans
 - **Multi-floor** support; new floors clone the exterior walls below them.
 - **Save / Load** plans as JSON, and **Print**.
+- **Autosave to the browser** — the current plan, active floor, and the full
+  undo/redo history are written to `localStorage` on every change and
+  restored on page reload, so a refresh never loses work.
 
 ---
 

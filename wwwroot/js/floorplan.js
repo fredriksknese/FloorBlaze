@@ -148,6 +148,15 @@ window.floorplan = (function () {
             const data = canvas.toDataURL('image/png');
             const w = window.open('');
             w.document.write('<img src="' + data + '" style="max-width:100%" onload="window.print();window.close()"/>');
+        },
+
+        storageGet: function (key) {
+            try { return localStorage.getItem(key); }
+            catch (_) { return null; }
+        },
+
+        storageSet: function (key, value) {
+            try { localStorage.setItem(key, value); } catch (_) { }
         }
     };
 })();

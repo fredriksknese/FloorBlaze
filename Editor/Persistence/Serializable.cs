@@ -53,3 +53,17 @@ public class FloorPlanSerializable
     public int wallNodeId { get; set; }
     public int roomLabelId { get; set; }
 }
+
+public class HistoryEntrySerializable
+{
+    public string json { get; set; } = "";
+    public int floor { get; set; }
+}
+
+public class FullStateSerializable
+{
+    public string plan { get; set; } = "";
+    public int floor { get; set; }
+    public List<HistoryEntrySerializable> undo { get; set; } = new();
+    public List<HistoryEntrySerializable> redo { get; set; } = new();
+}

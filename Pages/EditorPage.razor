@@ -144,6 +144,8 @@
 </div>
 
 @code {
+    private const string AutosaveKey = "floorblaze.autosave.v1";
+
     private readonly EditorEngine Eng = new();
     private ElementReference _canvas;
     private DotNetObjectReference<EditorPage>? _ref;
@@ -153,6 +155,7 @@
     private bool _showHelp;
     private bool _showAbout;
     private int _lastButton;
+    private int _persistedVersion;
 
     private string TypeMark(WallType t) => Eng.CurrentWallType == t ? "●" : "○";
 
@@ -169,8 +172,21 @@
         {
             _ref = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("floorplan.observe", _canvas, _ref);
+            var saved = await JS.InvokeAsync<string?>("floorplan.storageGet", AutosaveKey);
+            if (!string.IsNullOrEmpty(saved))
+                Eng.TryLoadFullState(saved);
+            _persistedVersion = Eng.MutationVersion;
             _ready = true;
+            await Refresh();
         }
+    }
+
+    private async Task PersistIfDirty()
+    {
+        if (!_ready || Eng.MutationVersion == _persistedVersion) return;
+        _persistedVersion = Eng.MutationVersion;
+        var json = Eng.SaveFullState();
+        await JS.InvokeVoidAsync("floorplan.storageSet", AutosaveKey, json);
     }
 
     [JSInvokable]
@@ -222,6 +238,7 @@
         {
             var scene = Eng.BuildScene();
             await JS.InvokeVoidAsync("floorplan.render", _canvas, scene);
+            await PersistIfDirty();
         }
         StateHasChanged();
     }
