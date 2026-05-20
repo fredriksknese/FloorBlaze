@@ -39,7 +39,20 @@ public class Furniture
         Height = item.Height * Constants.METER;
     }
 
-    public bool HasImage => !string.IsNullOrEmpty(ImagePath);
+    public bool HasImage => !string.IsNullOrEmpty(EffectiveImagePath);
+
+    // attached doors use a different SVG depending on the wall's type
+    public string EffectiveImagePath
+    {
+        get
+        {
+            if (IsDoor && IsAttached && AttachedTo != null)
+                return AttachedTo.Type == WallType.Exterior
+                    ? "furniture/door-exterior.svg"
+                    : "furniture/door-interior.svg";
+            return ImagePath;
+        }
+    }
 
     public bool IsDoor => Key == "door";
     public bool IsWindow => Key == "window";
@@ -58,9 +71,15 @@ public class Furniture
     {
         if (IsAttached && AttachedTo != null)
         {
+            // x is centre-pivot so an orientation flip doesn't shift the door along the wall.
+            // for doors, y is edge-pivot at the wall face so flipping ScaleY puts the door
+            // on the other side of the wall (always opening outward).
+            // for windows, y is centre-pivot so stretching grows symmetrically about the centre.
+            double ya = IsDoor ? 0 : Height / 2;
             return AttachedTo.LocalMatrix()
-                .Mul(Mat.Translate(X, Y))
-                .Mul(Mat.Scale(ScaleX, ScaleY));
+                .Mul(Mat.Translate(X + Width / 2, Y + ya))
+                .Mul(Mat.Scale(ScaleX, ScaleY))
+                .Mul(Mat.Translate(-Width / 2, -ya));
         }
         return Mat.Translate(X, Y)
             .Mul(Mat.Rotate(Rotation))

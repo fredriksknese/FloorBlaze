@@ -180,14 +180,15 @@ public partial class EditorEngine
             s.Rect(m, w.Length, w.Thickness, WallFill(w.Type), "#0d0e10", 1);
         }
 
-        // wall nodes
+        // wall nodes — match wall colour (black) and visual width (thickness + 1 px stroke)
         foreach (var n in seq.Nodes.Values)
         {
+            double size = n.Size + 1;
             Mat m = Vp.BaseMatrix
                 .Mul(Mat.Translate(n.X, n.Y))
                 .Mul(Mat.Rotate(n.AngleRad))
-                .Mul(Mat.Translate(-n.Size / 2, -n.Size / 2));
-            s.Rect(m, n.Size, n.Size, "#222222");
+                .Mul(Mat.Translate(-size / 2, -size / 2));
+            s.Rect(m, size, size, "#000000");
         }
 
         // furniture (z order)
@@ -198,7 +199,7 @@ public partial class EditorEngine
 
             if (f.HasImage)
             {
-                s.Image(m, f.Width, f.Height, f.ImagePath);
+                s.Image(m, f.Width, f.Height, f.EffectiveImagePath);
             }
             else if (f.IsCompass)
             {
@@ -220,7 +221,7 @@ public partial class EditorEngine
             {
                 Pt mid = Vp.WorldToScreen((w.X1 + w.X2) / 2, (w.Y1 + w.Y2) / 2);
                 s.TextScreen(mid.X, mid.Y - 14 - w.Thickness * Vp.Scale / 2,
-                    Meters(w.Length - Constants.WALL_THICKNESS), "#0d3b66", 13);
+                    Meters(w.Length), "#0d3b66", 13);
             }
         }
 

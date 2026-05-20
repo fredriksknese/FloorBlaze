@@ -300,6 +300,7 @@ public partial class EditorEngine
             if (WallsLocked) { Notify("Walls are locked"); return; }
             PushUndo();
             Plan.Current.Seq.RemoveWall(_hoverWall.LeftNode.Id, _hoverWall.RightNode.Id);
+            Plan.Current.Seq.PruneIsolatedNodes();
             _hoverWall = null;
             Notify("Deleted");
             return;
@@ -391,17 +392,23 @@ public partial class EditorEngine
                     if (_prevNodeId != null && _prevNodeId != tgt.Node.Id) PushUndo();
                     WallStep(tgt.Node);
                 }
-                else if (wall != null)
+                else
                 {
-                    PushUndo();
-                    var nn = Plan.Current.AddNodeToWall(wall, snapped);
-                    if (nn != null) WallStep(nn);
-                }
-                else if (CheckStep(tgt.Point))
-                {
-                    PushUndo();
-                    var created = Plan.Current.Seq.AddNode(tgt.Point.X, tgt.Point.Y);
-                    WallStep(created);
+                    // hit-test the resolved snap target, not the raw cursor — so the
+                    // committed point matches the preview even when the cursor grazes a wall
+                    var hitWall = HitWall(tgt.Point);
+                    if (hitWall != null)
+                    {
+                        PushUndo();
+                        var nn = Plan.Current.AddNodeToWall(hitWall, tgt.Point);
+                        if (nn != null) WallStep(nn);
+                    }
+                    else if (CheckStep(tgt.Point))
+                    {
+                        PushUndo();
+                        var created = Plan.Current.Seq.AddNode(tgt.Point.X, tgt.Point.Y);
+                        WallStep(created);
+                    }
                 }
                 Notify();
             }
@@ -452,6 +459,7 @@ public partial class EditorEngine
                     if (WallsLocked) { Notify("Walls are locked"); break; }
                     PushUndo();
                     Plan.Current.Seq.RemoveWall(wall.LeftNode.Id, wall.RightNode.Id);
+                    Plan.Current.Seq.PruneIsolatedNodes();
                     Notify();
                 }
                 break;
@@ -868,7 +876,13 @@ public partial class EditorEngine
         var (mx, my) = P(0, 0);
         yield return (HandleType.Move, mx, my);
 
-        if (Selected.IsAttached) yield break; // door/window: slide only
+        if (Selected.IsAttached)
+        {
+            // doors and windows can both be stretched along the wall
+            var (rx2, ry2) = P(hw, 0);
+            yield return (HandleType.Horizontal, rx2, ry2);
+            yield break;
+        }
 
         var (rx, ry) = P(hw, 0);
         yield return (HandleType.Horizontal, rx, ry);
@@ -944,8 +958,10 @@ public partial class EditorEngine
                 if (f.IsAttached && f.AttachedTo != null)
                 {
                     Pt local = f.AttachedTo.LocalMatrix().Invert().Apply(mw);
-                    f.X = Math.Clamp(local.X - f.Width / 2, 0,
-                        Math.Max(0, f.AttachedTo.Length - f.Width));
+                    double effW = f.Width * Math.Abs(f.ScaleX);
+                    double minX = (effW - f.Width) / 2;
+                    double maxX = f.AttachedTo.Length - (f.Width + effW) / 2;
+                    f.X = Math.Clamp(local.X - f.Width / 2, minX, Math.Max(minX, maxX));
                 }
                 else
                 {
@@ -984,6 +1000,19 @@ public partial class EditorEngine
                     f.ScaleX = Math.Sign(_hStartScaleX == 0 ? 1 : _hStartScaleX) * Math.Max(0.1, Math.Abs(_hStartScaleX) * ratio);
                 if (_dragHandle != HandleType.Horizontal)
                     f.ScaleY = Math.Sign(_hStartScaleY == 0 ? 1 : _hStartScaleY) * Math.Max(0.1, Math.Abs(_hStartScaleY) * ratio);
+
+                // attached window: keep the visible rect within the wall length and reposition
+                // X if the stretch would push the visible edge past the wall ends
+                if (f.IsAttached && f.AttachedTo != null)
+                {
+                    double maxScale = f.AttachedTo.Length / Math.Max(1, f.Width);
+                    if (Math.Abs(f.ScaleX) > maxScale)
+                        f.ScaleX = Math.Sign(f.ScaleX) * maxScale;
+                    double effW = f.Width * Math.Abs(f.ScaleX);
+                    double minX = (effW - f.Width) / 2;
+                    double maxX = f.AttachedTo.Length - (f.Width + effW) / 2;
+                    f.X = Math.Clamp(f.X, minX, Math.Max(minX, maxX));
+                }
                 break;
             }
         }

@@ -53,6 +53,23 @@ public class WallNodeSequence
                            || w.LeftNode.Id == rightId && w.RightNode.Id == leftId);
     }
 
+    // Drop any nodes that no longer have a wall attached. Call after deleting walls.
+    // (Skip when splitting a wall — the endpoints are about to get new walls.)
+    public void PruneIsolatedNodes()
+    {
+        var keep = new HashSet<int>();
+        foreach (var w in _walls)
+        {
+            keep.Add(w.LeftNode.Id);
+            keep.Add(w.RightNode.Id);
+        }
+        foreach (var id in _nodes.Keys.Where(id => !keep.Contains(id)).ToList())
+        {
+            _nodes.Remove(id);
+            _links.Remove(id);
+        }
+    }
+
     public bool RemoveNode(int id)
     {
         LastError = null;
