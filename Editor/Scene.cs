@@ -28,8 +28,8 @@ public class Scene
 {
     public List<DrawCmd> Cmds { get; } = new();
 
-    public void Rect(Mat m, double w, double h, string? fill, string? stroke = null, double lw = 1)
-        => Cmds.Add(new DrawCmd { T = "rect", M = m.ToArray(), W = w, H = h, Fill = fill, Stroke = stroke, Lw = lw });
+    public void Rect(Mat m, double w, double h, string? fill, string? stroke = null, double lw = 1, double[]? dash = null)
+        => Cmds.Add(new DrawCmd { T = "rect", M = m.ToArray(), W = w, H = h, Fill = fill, Stroke = stroke, Lw = lw, Dash = dash });
 
     public void Image(Mat m, double w, double h, string url)
         => Cmds.Add(new DrawCmd { T = "img", M = m.ToArray(), W = w, H = h, S = url });

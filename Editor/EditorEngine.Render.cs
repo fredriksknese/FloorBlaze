@@ -201,7 +201,8 @@ public partial class EditorEngine
             s.Rect(m, size, size, "#000000");
         }
 
-        // cut the wall where doors sit so the opening is visible
+        // cut the wall where doors sit so the opening is visible — extend slightly past
+        // the wall band so the dashed stroke is fully hidden under the door
         foreach (var f in Plan.Current.FurnitureMap.Values)
         {
             if (!f.IsDoor || !f.IsAttached || f.AttachedTo == null) continue;
@@ -209,8 +210,8 @@ public partial class EditorEngine
             double left = f.X + (f.Width - effW) / 2;
             Mat cm = Vp.BaseMatrix
                 .Mul(f.AttachedTo.LocalMatrix())
-                .Mul(Mat.Translate(left, 0));
-            s.Rect(cm, effW, f.AttachedTo.Thickness, "#ebebeb");
+                .Mul(Mat.Translate(left, -1));
+            s.Rect(cm, effW, f.AttachedTo.Thickness + 2, "#ebebeb");
         }
 
         // furniture (z order)

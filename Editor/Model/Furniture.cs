@@ -66,14 +66,15 @@ public class Furniture
         {
             if (IsDoor)
             {
-                // Doors: anchor x at the door's centre along the wall (flip-in-place hinge swap)
-                // and pivot y on the wall centreline so ScaleY=-1 keeps the SVG wall rect on the
-                // wall while flipping the swing arc to the other room.
+                // Doors attach to one wall face: ScaleY>0 hinges on the y=T face and opens
+                // outward into y>T; ScaleY<0 hinges on the y=0 face and opens into y<0.
+                // The door's bounding rect lives entirely on one side of the wall band.
                 double t = AttachedTo.Thickness;
+                double ya = ScaleY >= 0 ? t : 0;
                 return AttachedTo.LocalMatrix()
-                    .Mul(Mat.Translate(X + Width / 2, t / 2))
+                    .Mul(Mat.Translate(X + Width / 2, ya))
                     .Mul(Mat.Scale(ScaleX, ScaleY))
-                    .Mul(Mat.Translate(-Width / 2, -t / 2));
+                    .Mul(Mat.Translate(-Width / 2, 0));
             }
             // attached windows: scale around the centre so stretching grows
             // symmetrically about the centre and orientation flips stay in place

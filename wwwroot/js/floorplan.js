@@ -79,7 +79,14 @@ window.floorplan = (function () {
                 if (t === 'rect') {
                     const w = num(c.w, c.W), h = num(c.h, c.H);
                     if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); }
-                    if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.strokeRect(x, y, w, h); }
+                    if (stroke) {
+                        ctx.lineWidth = lw;
+                        ctx.strokeStyle = stroke;
+                        const dash = c.dash || c.Dash;
+                        if (dash) ctx.setLineDash(dash);
+                        ctx.strokeRect(x, y, w, h);
+                        if (dash) ctx.setLineDash([]);
+                    }
                 } else if (t === 'line') {
                     ctx.beginPath();
                     ctx.moveTo(x, y);

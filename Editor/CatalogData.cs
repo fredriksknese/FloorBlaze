@@ -68,7 +68,7 @@ public static partial class Catalog
         new("stairs-small-sq", "Staircase - small", "Structural", 2, 1.6, "#e9edf2", "", "furniture/stairs-small-sq.svg"),
     };
 
-    public static readonly CatalogItem DoorImg = new("door", "Door", "_special", 0.9, 1, "#c79a5b", "door", "furniture/door-exterior.svg");
+    public static readonly CatalogItem DoorImg = new("door", "Door", "_special", 0.9, 0.9, "#c79a5b", "door", "furniture/door-test.svg");
     public static readonly CatalogItem WindowImg = new("window", "Window", "_special", 1, 0.15, "#7fbfe0", "window", "furniture/window.svg");
     public static readonly IReadOnlyList<string> ImportedCategories = new[]{ "Bedroom", "Bathroom", "Kitchen", "Office", "Living Room", "Other", "Structural" };
 }

@@ -83,9 +83,8 @@ public class Floor
             }
             else if (fur.Key == "door")
             {
-                // Scale the door so the SVG <rect id="wall"> (25 of 133 SVG units tall)
-                // exactly matches the wall thickness. The frame stays *in* the wall.
-                fur.Height = attachedTo.Thickness * 133.0 / 25.0;
+                // door SVG is 100x100 (square) — keep catalog W = H so the swing radius
+                // equals the door's wall length. The matrix anchors Y on the wall centreline.
                 fur.Y = 0;
             }
         }
