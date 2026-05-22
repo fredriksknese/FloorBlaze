@@ -61,6 +61,12 @@ html, body {
     display: flex; flex-direction: column; padding: 16px; overflow-y: auto;
 }
 .fp-drawer h3 { margin: 0 0 12px; font-size: 18px; }
+.fp-search {
+    width: 100%; box-sizing: border-box; padding: 6px 10px;
+    border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
+    margin-bottom: 4px;
+}
+.fp-search:focus { outline: 2px solid #cfe0ff; border-color: #6ea1ff; }
 .fp-drawer .cat { font-weight: 600; margin: 14px 0 6px; color: #555; font-size: 13px; text-transform: uppercase; }
 .fp-item {
     display: flex; justify-content: space-between; align-items: center;

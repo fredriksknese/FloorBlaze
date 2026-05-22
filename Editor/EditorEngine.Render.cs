@@ -153,8 +153,8 @@ public partial class EditorEngine
     public Scene BuildScene()
     {
         var s = new Scene();
-        s.Clear("#ebebeb");
-        DrawGrid(s);
+        s.Clear(_exporting ? "#ffffff" : "#ebebeb");
+        if (!_exporting) DrawGrid(s);
 
         var seq = Plan.Current.Seq;
 
@@ -272,7 +272,7 @@ public partial class EditorEngine
         }
 
         // hover highlight (shows what the Delete key will remove)
-        if (_drag == DragMode.None && Selected == null &&
+        if (!_exporting && _drag == DragMode.None && Selected == null &&
             ActiveTool is Tool.Edit or Tool.Remove or Tool.View)
         {
             const string hi = "#e53935";
@@ -307,10 +307,10 @@ public partial class EditorEngine
         }
 
         // selection + handles
-        DrawSelection(s);
+        if (!_exporting) DrawSelection(s);
 
         // wall-add preview (reflects magnet / ortho snapping)
-        if (ActiveTool == Tool.WallAdd)
+        if (!_exporting && ActiveTool == Tool.WallAdd)
         {
             var tgt = ResolveWallTarget(_mouseWorld);
             Pt bw = tgt.Point;
@@ -344,7 +344,7 @@ public partial class EditorEngine
         }
 
         // measure preview
-        if (_measureStart.HasValue)
+        if (!_exporting && _measureStart.HasValue)
         {
             Pt a = Vp.WorldToScreen(_measureStart.Value.X, _measureStart.Value.Y);
             Pt b = Vp.WorldToScreen(_measureCur.X, _measureCur.Y);
@@ -355,13 +355,13 @@ public partial class EditorEngine
         }
 
         // pointer indicator
-        if (ActiveTool == Tool.WallAdd)
+        if (!_exporting && ActiveTool == Tool.WallAdd)
         {
             Pt rp = ResolveWallTarget(_mouseWorld).Point;
             Pt p = Vp.WorldToScreen(rp.X, rp.Y);
             s.CircleScreen(p.X, p.Y, 3, "#000000");
         }
-        else if (ActiveTool == Tool.Measure)
+        else if (!_exporting && ActiveTool == Tool.Measure)
         {
             Pt p = Vp.WorldToScreen(SnapWorld(_mouseWorld).X, SnapWorld(_mouseWorld).Y);
             s.CircleScreen(p.X, p.Y, 3, "#000000");

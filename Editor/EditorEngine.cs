@@ -180,6 +180,87 @@ public partial class EditorEngine
     // EditorPage watches this to autosave the full state to the browser
     public int MutationVersion { get; private set; }
 
+    // PNG export: suppresses UI overlays (hover, selection handles, previews)
+    // so the saved image shows only the floor itself
+    private bool _exporting;
+    public int ExportWidth { get; private set; }
+    public int ExportHeight { get; private set; }
+
+    public Scene BuildExportScene(double padMeters = 1.0, double maxPx = 2400)
+    {
+        var bbox = ComputeFloorBBox(padMeters * Constants.METER);
+        if (bbox == null)
+        {
+            ExportWidth = 64; ExportHeight = 64;
+            var empty = new Scene();
+            empty.Clear("#ffffff");
+            return empty;
+        }
+        double w = bbox.Value.maxX - bbox.Value.minX;
+        double h = bbox.Value.maxY - bbox.Value.minY;
+        double scale = Math.Min(maxPx / w, maxPx / h);
+        scale = Math.Clamp(scale, 0.2, 8.0);
+        double screenW = w * scale;
+        double screenH = h * scale;
+
+        double sCornerX = Vp.CornerX, sCornerY = Vp.CornerY, sScale = Vp.Scale;
+        double sScreenW = Vp.ScreenW, sScreenH = Vp.ScreenH;
+        Vp.CornerX = bbox.Value.minX;
+        Vp.CornerY = bbox.Value.minY;
+        Vp.Scale = scale;
+        Vp.ScreenW = screenW;
+        Vp.ScreenH = screenH;
+        _exporting = true;
+        Scene scene;
+        try { scene = BuildScene(); }
+        finally
+        {
+            _exporting = false;
+            Vp.CornerX = sCornerX; Vp.CornerY = sCornerY; Vp.Scale = sScale;
+            Vp.ScreenW = sScreenW; Vp.ScreenH = sScreenH;
+        }
+
+        ExportWidth = (int)Math.Ceiling(screenW);
+        ExportHeight = (int)Math.Ceiling(screenH);
+        return scene;
+    }
+
+    private (double minX, double minY, double maxX, double maxY)? ComputeFloorBBox(double padPx)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+        bool any = false;
+
+        foreach (var n in Plan.Current.Seq.Nodes.Values)
+        {
+            any = true;
+            if (n.X < minX) minX = n.X; if (n.X > maxX) maxX = n.X;
+            if (n.Y < minY) minY = n.Y; if (n.Y > maxY) maxY = n.Y;
+        }
+        foreach (var f in Plan.Current.FurnitureMap.Values)
+        {
+            Mat m = f.LocalMatrix();
+            double[] xs = { 0, f.Width, f.Width, 0 };
+            double[] ys = { 0, 0, f.Height, f.Height };
+            for (int i = 0; i < 4; i++)
+            {
+                Pt p = m.Apply(new Pt(xs[i], ys[i]));
+                any = true;
+                if (p.X < minX) minX = p.X; if (p.X > maxX) maxX = p.X;
+                if (p.Y < minY) minY = p.Y; if (p.Y > maxY) maxY = p.Y;
+            }
+        }
+        foreach (var rl in Plan.Current.RoomLabels)
+        {
+            any = true;
+            if (rl.X < minX) minX = rl.X; if (rl.X > maxX) maxX = rl.X;
+            if (rl.Y < minY) minY = rl.Y; if (rl.Y > maxY) maxY = rl.Y;
+        }
+
+        if (!any) return null;
+        return (minX - padPx, minY - padPx, maxX + padPx, maxY + padPx);
+    }
+
     public string SaveFullState()
     {
         var fs = new FullStateSerializable
@@ -312,9 +393,18 @@ public partial class EditorEngine
     // add free furniture at centre of current view
     public void AddCatalogFurniture(CatalogItem item)
     {
-        PushUndo();
         Pt c = Vp.ScreenToWorld(Vp.ScreenW / 2, Vp.ScreenH / 2);
         if (Snap) { c.X = Geometry.Snap(c.X); c.Y = Geometry.Snap(c.Y); }
+        // If something already lives at the drop point, select it instead of stacking.
+        var existing = HitFurniture(c);
+        if (existing != null)
+        {
+            Selected = existing;
+            ActiveTool = Tool.Edit;
+            Notify($"Selected {existing.Name}");
+            return;
+        }
+        PushUndo();
         Plan.AddFurniture(item, null, c);
         Notify($"Added {item.Name}");
     }
@@ -478,7 +568,14 @@ public partial class EditorEngine
 
             case Tool.FurnitureAddWindow:
             case Tool.FurnitureAddDoor:
-                if (wall != null)
+                if (fur != null)
+                {
+                    // clicked on existing furniture — select it instead of stacking on top
+                    Selected = fur;
+                    ActiveTool = Tool.Edit;
+                    Notify($"Selected {fur.Name}");
+                }
+                else if (wall != null)
                 {
                     PushUndo();
                     var item = ActiveTool == Tool.FurnitureAddDoor ? Catalog.Door : Catalog.Window;

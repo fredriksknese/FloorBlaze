@@ -46,8 +46,8 @@
         <div class="fp-spacer"></div>
 
         <button class="fp-btn" title="New plan" @onclick="NewPlan">📄</button>
-        <button class="fp-btn" title="Print" @onclick="Print">🖨</button>
         <button class="fp-btn" title="Save plan" @onclick="SavePlan">💾</button>
+        <button class="fp-btn" title="Save as PNG" @onclick="SavePng">🖼</button>
         <label class="fp-btn" title="Load plan" style="cursor:pointer">⬆️
             <InputFile OnChange="LoadPlan" style="display:none" accept=".txt,.json" />
         </label>
@@ -99,6 +99,7 @@
                 <p><b>Erase</b> — click a wall, node, furniture or room label to delete it.</p>
                 <p><b>Delete key</b> removes the selected furniture. <b>Ctrl+Z</b> undoes, <b>Ctrl+Y</b> redoes.</p>
                 <p><b>Pan</b> — right-drag or middle-drag, or the View tool; the mouse wheel zooms. Arrow keys pan (or move the selected item). <b>Esc</b> deselects.</p>
+                <p><b>Hotkeys</b> — <b>E</b> exterior wall, <b>I</b> interior wall, <b>R</b> room divider, <b>F</b> furniture, <b>W</b> window, <b>D</b> door, <b>L</b> room label.</p>
             </div>
         }
 
@@ -124,10 +125,14 @@
             <div class="fp-drawer">
                 <button class="fp-close" @onclick="() => _drawer = false">✕</button>
                 <h3>Add furniture</h3>
+                <input class="fp-search" type="text" placeholder="Search…"
+                       @bind="_search" @bind:event="oninput" />
                 @foreach (var cat in Catalog.Categories)
                 {
+                    var items = Catalog.ByCategory(cat).Where(MatchesSearch).ToList();
+                    if (items.Count == 0) continue;
                     <div class="cat">@cat</div>
-                    @foreach (var item in Catalog.ByCategory(cat))
+                    @foreach (var item in items)
                     {
                         <div class="fp-item" @onclick="() => AddFurniture(item)">
                             @if (!string.IsNullOrEmpty(item.ImagePath))
@@ -157,6 +162,17 @@
     private bool _showAbout;
     private int _lastButton;
     private int _persistedVersion;
+    private string _search = "";
+    private string? _storageUrl;
+
+    private bool MatchesSearch(CatalogItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_search)) return true;
+        string hay = (item.Name + " " + item.Category).ToLowerInvariant();
+        foreach (var w in _search.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            if (!hay.Contains(w)) return false;
+        return true;
+    }
 
     private string TypeMark(WallType t) => Eng.CurrentWallType == t ? "●" : "○";
 
@@ -173,7 +189,10 @@
         {
             _ref = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("floorplan.observe", _canvas, _ref);
-            var saved = await JS.InvokeAsync<string?>("floorplan.storageGet", AutosaveKey);
+            _storageUrl = await JS.InvokeAsync<string?>("floorplan.getQueryParam", "storage");
+            string? saved = !string.IsNullOrEmpty(_storageUrl)
+                ? await JS.InvokeAsync<string?>("floorplan.remoteGet", _storageUrl)
+                : await JS.InvokeAsync<string?>("floorplan.storageGet", AutosaveKey);
             if (!string.IsNullOrEmpty(saved))
                 Eng.TryLoadFullState(saved);
             _persistedVersion = Eng.MutationVersion;
@@ -187,7 +206,10 @@
         if (!_ready || Eng.MutationVersion == _persistedVersion) return;
         _persistedVersion = Eng.MutationVersion;
         var json = Eng.SaveFullState();
-        await JS.InvokeVoidAsync("floorplan.storageSet", AutosaveKey, json);
+        if (!string.IsNullOrEmpty(_storageUrl))
+            await JS.InvokeVoidAsync("floorplan.remoteSet", _storageUrl, json);
+        else
+            await JS.InvokeVoidAsync("floorplan.storageSet", AutosaveKey, json);
     }
 
     [JSInvokable]
@@ -229,6 +251,27 @@
                 break;
             case "arrowdown":
                 Eng.ArrowKey(0, 1);
+                break;
+            case "e" when !ctrl:
+                StartWall(WallType.Exterior);
+                break;
+            case "i" when !ctrl:
+                StartWall(WallType.Interior);
+                break;
+            case "r" when !ctrl:
+                StartWall(WallType.RoomDivider);
+                break;
+            case "f" when !ctrl:
+                OpenFurniture();
+                break;
+            case "w" when !ctrl:
+                StartTool(Tool.FurnitureAddWindow, "Click a wall to add a window.");
+                break;
+            case "d" when !ctrl:
+                StartTool(Tool.FurnitureAddDoor, "Click a wall to add a door. Right-click it to swing the other way.");
+                break;
+            case "l" when !ctrl:
+                StartRoomLabel();
                 break;
         }
     }
@@ -277,6 +320,7 @@
     {
         _addMenu = false;
         _drawer = true;
+        StateHasChanged();
     }
 
     private void AddFurniture(CatalogItem item)
@@ -327,9 +371,11 @@
         await JS.InvokeVoidAsync("floorplan.download", "floor_plan.txt", data);
     }
 
-    private async Task Print()
+    private async Task SavePng()
     {
-        await JS.InvokeVoidAsync("floorplan.print", _canvas);
+        var scene = Eng.BuildExportScene();
+        await JS.InvokeVoidAsync("floorplan.savePng",
+            Eng.ExportWidth, Eng.ExportHeight, scene, "floor_plan.png");
     }
 
     private async Task LoadPlan(InputFileChangeEventArgs e)

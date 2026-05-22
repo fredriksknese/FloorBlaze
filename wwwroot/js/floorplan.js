@@ -38,14 +38,21 @@ window.floorplan = (function () {
             report();
 
             window.addEventListener('keydown', (e) => {
+                // ignore global shortcuts when the user is typing in a text field
+                const ae = document.activeElement;
+                if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
                 const k = (e.key || '').toLowerCase();
                 const ctrl = e.ctrlKey || e.metaKey;
                 const isArrow = k === 'arrowup' || k === 'arrowdown' ||
                                 k === 'arrowleft' || k === 'arrowright';
+                const isToolLetter = !ctrl && (
+                    k === 'e' || k === 'i' || k === 'r' ||
+                    k === 'f' || k === 'w' || k === 'd' || k === 'l');
                 const handled =
                     k === 'escape' ||
                     k === 'delete' ||
                     isArrow ||
+                    isToolLetter ||
                     (ctrl && (k === 'z' || k === 'y'));
                 if (!handled) return;
                 if (k !== 'escape') e.preventDefault();
@@ -154,10 +161,26 @@ window.floorplan = (function () {
             URL.revokeObjectURL(a.href);
         },
 
-        print: function (canvas) {
-            const data = canvas.toDataURL('image/png');
-            const w = window.open('');
-            w.document.write('<img src="' + data + '" style="max-width:100%" onload="window.print();window.close()"/>');
+        savePng: function (width, height, scene, filename) {
+            const off = document.createElement('canvas');
+            off.width = Math.max(1, Math.ceil(width));
+            off.height = Math.max(1, Math.ceil(height));
+            this.render(off, scene);
+            off.toBlob(function (blob) {
+                if (!blob) return;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            }, 'image/png');
+        },
+
+        getQueryParam: function (name) {
+            try { return new URLSearchParams(window.location.search).get(name); }
+            catch (_) { return null; }
         },
 
         storageGet: function (key) {
@@ -167,6 +190,24 @@ window.floorplan = (function () {
 
         storageSet: function (key, value) {
             try { localStorage.setItem(key, value); } catch (_) { }
+        },
+
+        remoteGet: async function (url) {
+            try {
+                const r = await fetch(url, { method: 'GET', cache: 'no-store' });
+                if (!r.ok) return null;
+                return await r.text();
+            } catch (_) { return null; }
+        },
+
+        remoteSet: async function (url, value) {
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: value
+                });
+            } catch (_) { }
         }
     };
 })();

@@ -49,13 +49,20 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
 - **Arrow keys** pan the view, or nudge the selected item when one is selected.
 - **Esc** deselects / cancels the current wall chain / closes menus.
 - **Snap-to-grid** toggle and wall size labels.
+- **Hotkeys**: **E** exterior wall, **I** interior wall, **R** room divider,
+  **F** furniture, **W** window, **D** door, **L** room label.
 
 ### Plans
 - **Multi-floor** support; new floors clone the exterior walls below them.
-- **Save / Load** plans as JSON, and **Print**.
+- **Save / Load** plans as JSON.
+- **Save as PNG** — exports the whole floor (all walls, doors, windows,
+  furniture and labels) with a 1 m margin, regardless of pan/zoom.
 - **Autosave to the browser** — the current plan, active floor, and the full
   undo/redo history are written to `localStorage` on every change and
   restored on page reload, so a refresh never loses work.
+- **Remote storage** — appending `?storage=<url>` to the page URL routes
+  load and save through that endpoint instead of `localStorage`: a `GET` on
+  startup, a `POST` (JSON body) on every change.
 
 ---
 
