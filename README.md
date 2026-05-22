@@ -28,6 +28,8 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
 
 ### Rooms
 - Automatic **room detection** from the wall graph (planar face finding).
+- **Inside / outside differentiation** — every closed room gets a white floor
+  fill so the inside reads clearly against the gray outside, no toggle needed.
 - **Room labels** — add via the **+** menu, click inside a closed room, name it.
 - **Room area** toggle 📏 — shades each detected room and shows its size in m².
 
@@ -62,7 +64,9 @@ HTML5 `<canvas>` through a thin JavaScript interop layer.
   restored on page reload, so a refresh never loses work.
 - **Remote storage** — appending `?storage=<url>` to the page URL routes
   load and save through that endpoint instead of `localStorage`: a `GET` on
-  startup, a `POST` (JSON body) on every change.
+  startup, a `POST` (JSON body) on every change. When this mode is active,
+  the manual Save (💾) and Load (⬆️) buttons are hidden, since persistence
+  is handled automatically by the endpoint.
 
 ---
 

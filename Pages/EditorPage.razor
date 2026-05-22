@@ -46,11 +46,17 @@
         <div class="fp-spacer"></div>
 
         <button class="fp-btn" title="New plan" @onclick="NewPlan">📄</button>
-        <button class="fp-btn" title="Save plan" @onclick="SavePlan">💾</button>
+        @if (string.IsNullOrEmpty(_storageUrl))
+        {
+            <button class="fp-btn" title="Save plan" @onclick="SavePlan">💾</button>
+        }
         <button class="fp-btn" title="Save as PNG" @onclick="SavePng">🖼</button>
-        <label class="fp-btn" title="Load plan" style="cursor:pointer">⬆️
-            <InputFile OnChange="LoadPlan" style="display:none" accept=".txt,.json" />
-        </label>
+        @if (string.IsNullOrEmpty(_storageUrl))
+        {
+            <label class="fp-btn" title="Load plan" style="cursor:pointer">⬆️
+                <InputFile OnChange="LoadPlan" style="display:none" accept=".txt,.json" />
+            </label>
+        }
     </div>
 
     <div class="fp-canvas-wrap">
@@ -181,6 +187,13 @@
         Eng.Changed += OnEngineChanged;
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        // read this before first render so the Save/Load buttons can be
+        // hidden up-front when a storage URL is provided
+        _storageUrl = await JS.InvokeAsync<string?>("floorplan.getQueryParam", "storage");
+    }
+
     private void OnEngineChanged() => InvokeAsync(Refresh);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -189,7 +202,6 @@
         {
             _ref = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("floorplan.observe", _canvas, _ref);
-            _storageUrl = await JS.InvokeAsync<string?>("floorplan.getQueryParam", "storage");
             string? saved = !string.IsNullOrEmpty(_storageUrl)
                 ? await JS.InvokeAsync<string?>("floorplan.remoteGet", _storageUrl)
                 : await JS.InvokeAsync<string?>("floorplan.storageGet", AutosaveKey);

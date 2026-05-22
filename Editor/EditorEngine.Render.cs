@@ -158,13 +158,20 @@ public partial class EditorEngine
 
         var seq = Plan.Current.Seq;
 
-        // detect rooms once if needed
-        List<Room>? rooms = null;
-        if (ShowRoomArea || Plan.Current.RoomLabels.Count > 0)
-            rooms = Rooms.Detect(seq);
+        // always detect rooms — closed rooms get a white floor so the inside
+        // reads as a separate surface from the outside background
+        var rooms = Rooms.Detect(seq);
+
+        // white floor under every detected room (rendered first so walls
+        // and everything else draw over it cleanly)
+        foreach (var r in rooms)
+        {
+            var scr = r.Polygon.Select(p => Vp.WorldToScreen(p.X, p.Y)).ToList();
+            s.PolygonScreen(scr, "#ffffff");
+        }
 
         // room area shading (under the walls)
-        if (ShowRoomArea && rooms != null)
+        if (ShowRoomArea)
         {
             foreach (var r in rooms)
             {
